@@ -1,213 +1,202 @@
--- ULTIMATE DEBUG ESP for Boat Games (2026 Executors)
--- Prints EVERYTHING to console. Right Shift toggle.
--- TEST BOX always in center — if you see RED BOX + "DEBUG ON", Drawing WORKS!
+-- Highlight + NameTag ESP (like Boston/ChatGPT) with Rayfield Toggle
+-- Clean, handles resets, distance + health, red highlight
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Highlight ESP",
+   LoadingTitle = "Highlight ESP",
+   LoadingSubtitle = "Toggle ESP (Highlight + Name)",
+   ConfigurationSaving = {
+      Enabled = false,
+   },
+   KeySystem = false,
+})
+
+local Tab = Window:CreateTab("ESP", nil)
+local Section = Tab:CreateSection("Controls")
+
+local ESPEnabled = true
+
+local Toggle = Tab:CreateToggle({
+   Name = "ESP Enabled",
+   CurrentValue = true,
+   Flag = "ESPToggle",
+   Callback = function(Value)
+      ESPEnabled = Value
+      if not Value then
+         -- Hide all ESP when disabled
+         for _, player in ipairs(Players:GetPlayers()) do
+            if player.Character then
+               local highlight = player.Character:FindFirstChild("ESPHighlight")
+               local nametag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
+               if highlight then highlight.Enabled = false end
+               if nametag then nametag.Enabled = false end
+            end
+         end
+      end
+   end,
+})
+
+-- ESP Core (converted from your example)
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
 
-local Settings = {
-    Enabled = true,
-    TeamCheck = false,  -- DISABLED for boats
-    MaxDistance = math.huge,  -- INF dist
-    Debug = true,
-}
+local ESPPlayers = {}  -- Track ESP state
 
-local ESP = {}
-local TestDrawings = {}
-local UpdateCount = 0
-local ValidCount = 0
-
--- TEST BOX (always try to show)
-local function setupTest()
-    TestDrawings.Box = Drawing.new("Square")
-    TestDrawings.Box.Filled = false
-    TestDrawings.Box.Color = Color3.fromRGB(255, 0, 0)
-    TestDrawings.Box.Thickness = 3
-    TestDrawings.Box.Size = Vector2.new(100, 100)
-    TestDrawings.Box.Visible = true
-
-    TestDrawings.Text = Drawing.new("Text")
-    TestDrawings.Text.Text = "🟥 ESP DEBUG ON\nIf you see this → Drawing OK!"
-    TestDrawings.Text.Size = 18
-    TestDrawings.Text.Color = Color3.fromRGB(255, 255, 255)
-    TestDrawings.Text.Center = true
-    TestDrawings.Text.Outline = true
-    TestDrawings.Text.Font = 2
-    TestDrawings.Text.Visible = true
-
-    print("🟥 TEST BOX created — look center screen!")
+local function createHighlight(player)
+   if player.Character and not player.Character:FindFirstChild("ESPHighlight") then
+      local highlight = Instance.new("Highlight")
+      highlight.Name = "ESPHighlight"
+      highlight.FillColor = Color3.fromRGB(255, 0, 0)
+      highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+      highlight.FillTransparency = 0.6
+      highlight.OutlineTransparency = 0
+      highlight.Adornee = player.Character
+      highlight.Parent = player.Character
+      highlight.Enabled = ESPEnabled
+      return highlight
+   end
 end
 
-local function updateTest()
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    if TestDrawings.Box then
-        TestDrawings.Box.Position = center
-        TestDrawings.Text.Position = center + Vector2.new(0, 60)
-        TestDrawings.Box.Visible = Settings.Enabled
-        TestDrawings.Text.Visible = Settings.Enabled
-    end
+local function createNameTag(player)
+   if player.Character and player.Character:FindFirstChild("Head") and not player.Character.Head:FindFirstChild("NameTag") then
+      local billboard = Instance.new("BillboardGui")
+      billboard.Name = "NameTag"
+      billboard.Adornee = player.Character.Head
+      billboard.Size = UDim2.new(0, 140, 0, 30)
+      billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+      billboard.AlwaysOnTop = true
+      billboard.Parent = player.Character.Head
+      billboard.Enabled = ESPEnabled
+
+      local textLabel = Instance.new("TextLabel")
+      textLabel.Name = "TagLabel"
+      textLabel.Size = UDim2.new(1, 0, 1, 0)
+      textLabel.BackgroundTransparency = 1
+      textLabel.TextColor3 = Color3.new(1, 1, 1)
+      textLabel.Font = Enum.Font.Cartoon
+      textLabel.TextScaled = true
+      textLabel.TextStrokeTransparency = 0.6
+      textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+      textLabel.Text = ""
+      textLabel.Parent = billboard
+      return textLabel
+   end
 end
 
-local function getRootPart(char)
-    return char:FindFirstChild("HumanoidRootPart") or 
-           char:FindFirstChild("UpperTorso") or 
-           char:FindFirstChild("Torso") or 
-           char:FindFirstChild("LowerTorso")
+local function updateNameTag(player)
+   if not ESPEnabled then return end
+   if not (player.Character and player.Character:FindFirstChild("Head") and player.Character.Head:FindFirstChild("NameTag") 
+      and player.Character:FindFirstChild("Humanoid")) then 
+      return 
+   end
+   
+   local tag = player.Character.Head.NameTag.TagLabel
+   local lchar = LocalPlayer.Character
+   if not lchar or not lchar.PrimaryPart then return end
+   
+   local distance = (lchar.PrimaryPart.Position - player.Character.PrimaryPart.Position).Magnitude
+   local health = math.floor(player.Character.Humanoid.Health)
+   tag.Text = player.Name .. " | " .. string.format("%.0f", distance) .. "m | ❤️" .. health
 end
 
-local function newDrawing(class, props)
-    local d = Drawing.new(class)
-    for k, v in pairs(props or {}) do d[k] = v end
-    return d
+local function updateHighlight(player)
+   if not ESPEnabled then return end
+   if not (player.Character and player.Character:FindFirstChild("ESPHighlight") and player.Character:FindFirstChild("Humanoid")) then 
+      return 
+   end
+   
+   local highlight = player.Character.ESPHighlight
+   if player.Character.Humanoid.Health <= 0 then
+      highlight.FillColor = Color3.fromRGB(120, 0, 0)  -- Dark red when dead
+   else
+      highlight.FillColor = Color3.fromRGB(255, 0, 0)  -- Bright red when alive
+   end
 end
 
-local function removeESP(plr)
-    if ESP[plr] then
-        for _, obj in pairs(ESP[plr]) do obj:Remove() end
-        ESP[plr] = nil
-    end
+local function setupESP(player)
+   if player == LocalPlayer then return end
+   
+   -- Clean up old ESP if exists
+   if player.Character then
+      local oldHighlight = player.Character:FindFirstChild("ESPHighlight")
+      local oldNameTag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
+      if oldHighlight then oldHighlight:Destroy() end
+      if oldNameTag then oldNameTag:Destroy() end
+   end
+   
+   ESPPlayers[player] = true
+   
+   player.CharacterAdded:Connect(function()
+      wait(0.2)  -- Wait for character to fully load
+      createHighlight(player)
+      createNameTag(player)
+      updateNameTag(player)
+      updateHighlight(player)
+   end)
+   
+   -- Setup current character
+   if player.Character then
+      createHighlight(player)
+      createNameTag(player)
+      updateNameTag(player)
+      updateHighlight(player)
+   end
 end
 
-local function addESP(plr)
-    if plr == LocalPlayer or ESP[plr] then return end
-    ESP[plr] = {
-        Box = newDrawing("Square", {Filled = false, Thickness = 2, Color = Color3.fromRGB(255, 0, 0), Transparency = 1, Visible = false}),
-        Tracer = newDrawing("Line", {Thickness = 2, Color = Color3.fromRGB(255, 255, 0), Transparency = 1, Visible = false}),
-        Name = newDrawing("Text", {Size = 14, Color = Color3.fromRGB(255, 255, 255), Center = true, Outline = true, Font = 2, Visible = false}),
-    }
-    if Settings.Debug then print("➕ Added ESP for", plr.Name) end
+-- Initialize existing players
+for _, player in ipairs(Players:GetPlayers()) do
+   setupESP(player)
 end
 
-local function isOnScreen(char)
-    local parts = {"Head", "UpperTorso", "LowerTorso", "Torso", "HumanoidRootPart"}
-    local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
-    local anyVisible = false
-    for _, partName in ipairs(parts) do
-        local part = char:FindFirstChild(partName)
-        if part then
-            local pos, visible = Camera:WorldToViewportPoint(part.Position)
-            if visible then anyVisible = true end
-            minX = math.min(minX, pos.X)
-            minY = math.min(minY, pos.Y)
-            maxX = math.max(maxX, pos.X)
-            maxY = math.max(maxY, pos.Y)
-        end
-    end
-    return anyVisible, Vector2.new(minX + (maxX - minX)/2, minY), Vector2.new(maxX - minX, maxY - minY)
-end
+-- New players
+Players.PlayerAdded:Connect(setupESP)
 
-local function update()
-    UpdateCount = UpdateCount + 1
-    if Settings.Debug and UpdateCount % 60 == 0 then  -- Every sec
-        local totalPlayers = #Players:GetPlayers()
-        print("📊 Update #" .. UpdateCount .. " | Total Players: " .. totalPlayers .. " | ESP Active: " .. (Settings.Enabled and "YES" or "NO"))
-    end
-
-    if not Settings.Enabled then
-        for plr, _ in pairs(ESP) do removeESP(plr) end
-        updateTest()
-        return
-    end
-
-    local lChar = LocalPlayer.Character
-    if not lChar then return end  -- Wait for local char
-    local lRoot = getRootPart(lChar)
-    if not lRoot then return end
-
-    -- Cleanup invalid
-    for plr, _ in pairs(ESP) do
-        local char = plr.Character
-        if not char or not getRootPart(char) then
-            removeESP(plr)
-            if Settings.Debug then print("❌ Removed invalid ESP:", plr.Name) end
-        end
-    end
-
-    -- Update/Add valid
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then continue end
-
-        local char = plr.Character
-        if not char then 
-            if Settings.Debug and UpdateCount % 120 == 0 then print("⏳ No char:", plr.Name) end
-            continue 
-        end
-
-        local root = getRootPart(char)
-        if not root then 
-            if Settings.Debug then print("🚫 No root:", plr.Name) end
-            continue 
-        end
-
-        local dist = (root.Position - lRoot.Position).Magnitude
-        if dist > Settings.MaxDistance then 
-            if Settings.Debug and UpdateCount % 120 == 0 then print("📏 Too far:", plr.Name, math.floor(dist)) end
-            continue 
-        end
-
-        if Settings.TeamCheck and plr.Team == LocalPlayer.Team then 
-            continue 
-        end
-
-        local onScreen, centerPos, size = isOnScreen(char)
-        if not onScreen then 
-            if Settings.Debug and UpdateCount % 240 == 0 then print("👁️ Offscreen:", plr.Name) end
-            continue 
-        end
-
-        ValidCount = ValidCount + 1
-        if not ESP[plr] then addESP(plr) end
-        local drawings = ESP[plr]
-
-        local height = size.Y * 1.1
-        local width = height / 2.2
-        local boxPos = centerPos - Vector2.new(width/2, 0)
-
-        -- Box
-        drawings.Box.Position = boxPos
-        drawings.Box.Size = Vector2.new(width, height)
-        drawings.Box.Visible = true
-
-        -- Tracer
-        drawings.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y - 50)
-        drawings.Tracer.To = centerPos + Vector2.new(0, height/2)
-        drawings.Tracer.Visible = true
-
-        -- Name + Dist
-        drawings.Name.Text = plr.Name .. " [" .. math.floor(dist) .. "]"
-        drawings.Name.Position = boxPos + Vector2.new(width/2, -20)
-        drawings.Name.Visible = true
-
-        if Settings.Debug and ValidCount % 30 == 0 then
-            print("✅ DRAWING ESP:", plr.Name, "dist:", math.floor(dist), "box:", width, "x", height)
-        end
-    end
-
-    updateTest()
-end
-
--- Init
-setupTest()
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then addESP(plr) end
-end
-Players.PlayerAdded:Connect(function(plr) addESP(plr) end)
-Players.PlayerRemoving:Connect(removeESP)
-
-RunService.Heartbeat:Connect(update)  -- Heartbeat = smoother, less lag
-
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        Settings.Enabled = not Settings.Enabled
-        print("🔄 ESP TOGGLED:", Settings.Enabled and "ON (watch console!)" or "OFF")
-        ValidCount = 0
-    end
+-- Cleanup leaving players
+Players.PlayerRemoving:Connect(function(player)
+   ESPPlayers[player] = nil
+   if player.Character then
+      local highlight = player.Character:FindFirstChild("ESPHighlight")
+      local nametag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
+      if highlight then highlight:Destroy() end
+      if nametag then nametag:Destroy() end
+   end
 end)
 
-print("🚀 DEBUG ESP LOADED! Look for RED BOX center screen.")
-print("Right Shift toggle. Check console for player info.")
-print("If NO RED BOX → Executor blocks Drawing (try Synapse/Krnl).")
-print("If RED BOX but no player ESP → No other players / all invalid.")
+-- Update loop (smoother than while true)
+local updateConnection
+updateConnection = RunService.Heartbeat:Connect(function()
+   if not ESPEnabled then return end
+   
+   for _, player in ipairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer and ESPPlayers[player] then
+         if player.Character and player.Character:FindFirstChild("Humanoid") then
+            updateNameTag(player)
+            updateHighlight(player)
+         end
+      end
+   end
+end)
+
+-- Toggle handler for enabling/disabling
+Toggle:OnChanged(function()
+   for _, player in ipairs(Players:GetPlayers()) do
+      if player.Character then
+         local highlight = player.Character:FindFirstChild("ESPHighlight")
+         local nametag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
+         if highlight then highlight.Enabled = ESPEnabled end
+         if nametag then nametag.Enabled = ESPEnabled end
+      end
+   end
+end)
+
+Rayfield:Notify({
+   Title = "Highlight ESP Loaded",
+   Content = "Toggle ESP in the UI.\nShows highlight + name/distance/health.",
+   Duration = 5,
+})
+
+print("Highlight ESP with Rayfield toggle loaded - works like Boston script!")
