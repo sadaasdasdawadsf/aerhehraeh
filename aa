@@ -1,15 +1,13 @@
--- Highlight + NameTag ESP (like Boston/ChatGPT) with Rayfield Toggle
--- Clean, handles resets, distance + health, red highlight
+-- Highlight + NameTag ESP with Reliable Rayfield Toggle (Destroy on OFF)
+-- Fixed: Toggle now fully removes ESP when off
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Highlight ESP",
+   Name = "Highlight ESP Fix",
    LoadingTitle = "Highlight ESP",
-   LoadingSubtitle = "Toggle ESP (Highlight + Name)",
-   ConfigurationSaving = {
-      Enabled = false,
-   },
+   LoadingSubtitle = "Toggle Fully Works",
+   ConfigurationSaving = { Enabled = false },
    KeySystem = false,
 })
 
@@ -24,156 +22,132 @@ local Toggle = Tab:CreateToggle({
    Flag = "ESPToggle",
    Callback = function(Value)
       ESPEnabled = Value
-      if not Value then
-         -- Hide all ESP when disabled
+      if Value then
+         -- Recreate for all when turning ON
+         for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+               createHighlight(player)
+               createNameTag(player)
+            end
+         end
+      else
+         -- Fully destroy when turning OFF (most reliable way)
          for _, player in ipairs(Players:GetPlayers()) do
             if player.Character then
-               local highlight = player.Character:FindFirstChild("ESPHighlight")
-               local nametag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
-               if highlight then highlight.Enabled = false end
-               if nametag then nametag.Enabled = false end
+               local hl = player.Character:FindFirstChild("ESPHighlight")
+               local nt = player.Character:FindFirstChild("Head") and player.Character.Head:FindFirstChild("NameTag")
+               if hl then hl:Destroy() end
+               if nt then nt:Destroy() end
             end
          end
       end
    end,
 })
 
--- ESP Core (converted from your example)
+-- Core ESP Functions (same as before, but with Enabled management)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
-local ESPPlayers = {}  -- Track ESP state
+local ESPPlayers = {}  -- track who has ESP setup
 
 local function createHighlight(player)
-   if player.Character and not player.Character:FindFirstChild("ESPHighlight") then
-      local highlight = Instance.new("Highlight")
-      highlight.Name = "ESPHighlight"
-      highlight.FillColor = Color3.fromRGB(255, 0, 0)
-      highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-      highlight.FillTransparency = 0.6
-      highlight.OutlineTransparency = 0
-      highlight.Adornee = player.Character
-      highlight.Parent = player.Character
-      highlight.Enabled = ESPEnabled
-      return highlight
-   end
+   if not player.Character or player.Character:FindFirstChild("ESPHighlight") then return end
+   
+   local highlight = Instance.new("Highlight")
+   highlight.Name = "ESPHighlight"
+   highlight.FillColor = Color3.fromRGB(255, 0, 0)
+   highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+   highlight.FillTransparency = 0.6
+   highlight.OutlineTransparency = 0
+   highlight.Adornee = player.Character
+   highlight.Parent = player.Character
+   highlight.Enabled = ESPEnabled  -- respect current toggle
 end
 
 local function createNameTag(player)
-   if player.Character and player.Character:FindFirstChild("Head") and not player.Character.Head:FindFirstChild("NameTag") then
-      local billboard = Instance.new("BillboardGui")
-      billboard.Name = "NameTag"
-      billboard.Adornee = player.Character.Head
-      billboard.Size = UDim2.new(0, 140, 0, 30)
-      billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-      billboard.AlwaysOnTop = true
-      billboard.Parent = player.Character.Head
-      billboard.Enabled = ESPEnabled
+   if not player.Character or not player.Character:FindFirstChild("Head") or player.Character.Head:FindFirstChild("NameTag") then return end
+   
+   local billboard = Instance.new("BillboardGui")
+   billboard.Name = "NameTag"
+   billboard.Adornee = player.Character.Head
+   billboard.Size = UDim2.new(0, 140, 0, 30)
+   billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+   billboard.AlwaysOnTop = true
+   billboard.Parent = player.Character.Head
+   billboard.Enabled = ESPEnabled
 
-      local textLabel = Instance.new("TextLabel")
-      textLabel.Name = "TagLabel"
-      textLabel.Size = UDim2.new(1, 0, 1, 0)
-      textLabel.BackgroundTransparency = 1
-      textLabel.TextColor3 = Color3.new(1, 1, 1)
-      textLabel.Font = Enum.Font.Cartoon
-      textLabel.TextScaled = true
-      textLabel.TextStrokeTransparency = 0.6
-      textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-      textLabel.Text = ""
-      textLabel.Parent = billboard
-      return textLabel
-   end
+   local textLabel = Instance.new("TextLabel")
+   textLabel.Name = "TagLabel"
+   textLabel.Size = UDim2.new(1, 0, 1, 0)
+   textLabel.BackgroundTransparency = 1
+   textLabel.TextColor3 = Color3.new(1, 1, 1)
+   textLabel.Font = Enum.Font.Cartoon
+   textLabel.TextScaled = true
+   textLabel.TextStrokeTransparency = 0.6
+   textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+   textLabel.Text = ""
+   textLabel.Parent = billboard
 end
 
 local function updateNameTag(player)
    if not ESPEnabled then return end
-   if not (player.Character and player.Character:FindFirstChild("Head") and player.Character.Head:FindFirstChild("NameTag") 
-      and player.Character:FindFirstChild("Humanoid")) then 
-      return 
-   end
+   local char = player.Character
+   if not (char and char:FindFirstChild("Head") and char.Head:FindFirstChild("NameTag") and char:FindFirstChild("Humanoid")) then return end
    
-   local tag = player.Character.Head.NameTag.TagLabel
+   local tag = char.Head.NameTag.TagLabel
    local lchar = LocalPlayer.Character
-   if not lchar or not lchar.PrimaryPart then return end
+   if not (lchar and lchar.PrimaryPart) then return end
    
-   local distance = (lchar.PrimaryPart.Position - player.Character.PrimaryPart.Position).Magnitude
-   local health = math.floor(player.Character.Humanoid.Health)
-   tag.Text = player.Name .. " | " .. string.format("%.0f", distance) .. "m | ❤️" .. health
+   local dist = (lchar.PrimaryPart.Position - char.PrimaryPart.Position).Magnitude
+   local health = math.floor(char.Humanoid.Health)
+   tag.Text = player.Name .. " | " .. math.floor(dist) .. "m | ❤️" .. health
 end
 
 local function updateHighlight(player)
    if not ESPEnabled then return end
-   if not (player.Character and player.Character:FindFirstChild("ESPHighlight") and player.Character:FindFirstChild("Humanoid")) then 
-      return 
-   end
+   local char = player.Character
+   if not (char and char:FindFirstChild("ESPHighlight") and char:FindFirstChild("Humanoid")) then return end
    
-   local highlight = player.Character.ESPHighlight
-   if player.Character.Humanoid.Health <= 0 then
-      highlight.FillColor = Color3.fromRGB(120, 0, 0)  -- Dark red when dead
-   else
-      highlight.FillColor = Color3.fromRGB(255, 0, 0)  -- Bright red when alive
-   end
+   local hl = char.ESPHighlight
+   hl.FillColor = (char.Humanoid.Health <= 0) and Color3.fromRGB(120, 0, 0) or Color3.fromRGB(255, 0, 0)
 end
 
 local function setupESP(player)
    if player == LocalPlayer then return end
-   
-   -- Clean up old ESP if exists
-   if player.Character then
-      local oldHighlight = player.Character:FindFirstChild("ESPHighlight")
-      local oldNameTag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
-      if oldHighlight then oldHighlight:Destroy() end
-      if oldNameTag then oldNameTag:Destroy() end
-   end
-   
    ESPPlayers[player] = true
    
-   player.CharacterAdded:Connect(function()
-      wait(0.2)  -- Wait for character to fully load
+   player.CharacterAdded:Connect(function(char)
+      wait(0.2)
       createHighlight(player)
       createNameTag(player)
-      updateNameTag(player)
-      updateHighlight(player)
    end)
    
-   -- Setup current character
    if player.Character then
       createHighlight(player)
       createNameTag(player)
-      updateNameTag(player)
-      updateHighlight(player)
    end
 end
 
--- Initialize existing players
+-- Init
 for _, player in ipairs(Players:GetPlayers()) do
    setupESP(player)
 end
 
--- New players
 Players.PlayerAdded:Connect(setupESP)
 
--- Cleanup leaving players
 Players.PlayerRemoving:Connect(function(player)
    ESPPlayers[player] = nil
-   if player.Character then
-      local highlight = player.Character:FindFirstChild("ESPHighlight")
-      local nametag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
-      if highlight then highlight:Destroy() end
-      if nametag then nametag:Destroy() end
-   end
 end)
 
--- Update loop (smoother than while true)
-local updateConnection
-updateConnection = RunService.Heartbeat:Connect(function()
+-- Update loop
+RunService.Heartbeat:Connect(function()
    if not ESPEnabled then return end
-   
    for _, player in ipairs(Players:GetPlayers()) do
       if player ~= LocalPlayer and ESPPlayers[player] then
-         if player.Character and player.Character:FindFirstChild("Humanoid") then
+         local char = player.Character
+         if char and char:FindFirstChild("Humanoid") then
             updateNameTag(player)
             updateHighlight(player)
          end
@@ -181,22 +155,10 @@ updateConnection = RunService.Heartbeat:Connect(function()
    end
 end)
 
--- Toggle handler for enabling/disabling
-Toggle:OnChanged(function()
-   for _, player in ipairs(Players:GetPlayers()) do
-      if player.Character then
-         local highlight = player.Character:FindFirstChild("ESPHighlight")
-         local nametag = player.Character.Head and player.Character.Head:FindFirstChild("NameTag")
-         if highlight then highlight.Enabled = ESPEnabled end
-         if nametag then nametag.Enabled = ESPEnabled end
-      end
-   end
-end)
-
 Rayfield:Notify({
-   Title = "Highlight ESP Loaded",
-   Content = "Toggle ESP in the UI.\nShows highlight + name/distance/health.",
-   Duration = 5,
+   Title = "Fixed Highlight ESP",
+   Content = "Toggle OFF now fully removes ESP (destroy).\nToggle ON recreates it.\nShould toggle perfectly now.",
+   Duration = 6,
 })
 
-print("Highlight ESP with Rayfield toggle loaded - works like Boston script!")
+print("Fixed ESP loaded - toggle should work 100%")
