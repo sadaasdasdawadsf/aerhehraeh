@@ -1,0 +1,47 @@
+{
+    "_comment": "Updated Astroneer Dedicated Server Egg - March 2026 - with Proton fixes",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": "https://raw.githubusercontent.com/pelican-eggs/games-steamcmd/main/astroneer/egg-astroneer-dedicated-server.json"
+    },
+    "exported_at": "2026-03-07T00:00:00+00:00",
+    "name": "Astroneer Dedicated Server (Updated)",
+    "author": "community + your tweaks",
+    "uuid": "new-uuid-here-change-if-duplicate",  // Generate a new UUID or leave blank for auto
+    "description": "Astroneer Dedicated Server - Proton on Linux with wined3d fallback for headless",
+    "features": null,
+    "docker_images": {
+        "Proton Default": "ghcr.io/ptero-eggs/steamcmd:proton",
+        "Proton-GE (recommended)": "ghcr.io/ptero-eggs/steamcmd:proton-ge"
+    },
+    "file_denylist": [],
+    "startup": "PROTON_USE_WINED3D=1 PROTON_NO_ESYNC=1 PROTON_NO_FSYNC=1 proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe",
+    "config": {
+        "files": "{\r\n    \"Astro/Saved/Config/WindowsServer/Engine.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"url.Port\": \"{{server.build.default.port}}\",\r\n            \"[SystemSettings].net.AllowEncryption\":\"false\"\r\n        }\r\n    },\r\n    \"Astro/Saved/Config/WindowsServer/AstroServerSettings.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"[/Script/Astro.AstroServerSettings].PublicIP\": \"{{env.PUBLIC_IP}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerName\": \"{{env.OWNER_NAME}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerGuid\": \"{{env.OWNER_GUID}}\",\r\n            \"[/Script/Astro.AstroServerSettings].PlayerProperties\": \"(PlayerFirstJoinName=\\\"{{env.OWNER_NAME}}\\\",PlayerCategory=Admin,PlayerGuid=\\\"{{env.OWNER_GUID}}\\\",PlayerRecentJoinName=\\\"\\\")\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerPassword\": \"{{env.SERVER_PWD}}\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerName\": \"{{env.SERVER_NAME}}\"\r\n        }\r\n    }\r\n}",
+        "startup": "{\"done\": \"nable to use setpriority safely\"}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Updated steamcmd install with Windows force\nif [[ \"${STEAM_USER}\" == \"\" ]] || [[ \"${STEAM_PASS}\" == \"\" ]]; then\n  STEAM_USER=anonymous\nfi\nexport HOME=/mnt/server\ncd /tmp\nmkdir -p /mnt/server/steamcmd\ncurl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\ntar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd\ncd /mnt/server/steamcmd\n./steamcmd.sh +force_install_dir /mnt/server +login ${STEAM_USER} +@sSteamCmdForcePlatformType windows +app_update 728470 validate +quit\nmkdir -p /mnt/server/.steam/sdk32 /mnt/server/.steam/sdk64\ncp linux32/steamclient.so ../.steam/sdk32/\ncp linux64/steamclient.so ../.steam/sdk64/\necho \"Install complete\"",
+            "container": "ghcr.io/ptero-eggs/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        // Your existing variables here - copy from your JSON
+        // Add this optional one for Proton-GE toggle if you want
+        {
+            "name": "Proton Variant",
+            "description": "Proton version to use",
+            "env_variable": "PROTON_VARIANT",
+            "default_value": "proton",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:proton,proton-ge",
+            "field_type": "text"
+        }
+        // ... paste the rest of your variables array
+    ]
+}
